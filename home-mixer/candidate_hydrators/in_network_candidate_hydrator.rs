@@ -14,7 +14,6 @@ impl Hydrator<ScoredPostsQuery, PostCandidate> for InNetworkCandidateHydrator {
         query: &ScoredPostsQuery,
         candidates: &[PostCandidate],
     ) -> Result<Vec<PostCandidate>, String> {
-        let viewer_id = query.user_id as u64;
         let followed_ids: HashSet<u64> = query
             .user_features
             .followed_user_ids
@@ -26,8 +25,7 @@ impl Hydrator<ScoredPostsQuery, PostCandidate> for InNetworkCandidateHydrator {
         let hydrated_candidates = candidates
             .iter()
             .map(|candidate| {
-                let is_self = candidate.author_id == viewer_id;
-                let is_in_network = is_self || followed_ids.contains(&candidate.author_id);
+                let is_in_network = followed_ids.contains(&candidate.author_id);
                 PostCandidate {
                     in_network: Some(is_in_network),
                     ..Default::default()

@@ -298,6 +298,14 @@ class PhoenixRetrievalModel(hk.Module):
         candidate_post_embeddings = recsys_embeddings.candidate_post_embeddings
         candidate_author_embeddings = recsys_embeddings.candidate_author_embeddings
 
+        valid_hash_mask = (batch.candidate_post_hashes != 0).astype(candidate_post_embeddings.dtype)  # type: ignore
+        valid_hash_mask = valid_hash_mask[..., None]
+        candidate_post_embeddings = candidate_post_embeddings * valid_hash_mask
+
+        valid_author_mask = (batch.candidate_author_hashes != 0).astype(candidate_author_embeddings.dtype)  # type: ignore
+        valid_author_mask = valid_author_mask[..., None]
+        candidate_author_embeddings = candidate_author_embeddings * valid_author_mask
+
         post_author_embedding = jnp.concatenate(
             [candidate_post_embeddings, candidate_author_embeddings], axis=2
         )
@@ -365,8 +373,20 @@ class PhoenixRetrievalModel(hk.Module):
         scores = jnp.matmul(user_representation, corpus_embeddings.T)
 
         if corpus_mask is not None:
+            corpus_mask = corpus_mask.astype(jnp.bool_)
             scores = jnp.where(corpus_mask[None, :], scores, -INF)
 
-        top_k_scores, top_k_indices = jax.lax.top_k(scores, top_k)
+        max_k = scores.shape[-1]
+        safe_k = min(top_k, max_k)
+        top_k_scores, top_k_indices = jax.lax.top_k(scores, safe_k)
+
+        if safe_k < top_k:
+            pad = top_k - safe_k
+            top_k_indices = jnp.pad(top_k_indices, ((0, 0), (0, pad)), constant_values=-1)
+            top_k_scores = jnp.pad(top_k_scores, ((0, 0), (0, pad)), constant_values=-INF)
+
+        if corpus_mask is not None:
+            invalid = top_k_scores <= -INF / 2
+            top_k_indices = jnp.where(invalid, -1, top_k_indices)
 
         return top_k_indices, top_k_scores

@@ -177,7 +177,7 @@ def block_history_reduce(
 
     history_embedding = history_embedding.reshape(B, S, D)
 
-    history_padding_mask = (history_post_hashes[:, :, 0] != 0).reshape(B, S)
+    history_padding_mask = (history_post_hashes[:, :, 0] != 0).reshape(B, S).astype(jnp.bool_)
 
     return history_embedding, history_padding_mask
 

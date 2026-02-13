@@ -145,7 +145,7 @@ class Linear(hk.Linear):
         output_size = self.output_size
 
         w = hk.get_parameter(
-            "w", [input_size, output_size], jnp.float32, init=hk.initializers.Constant(0)
+            "w", [input_size, output_size], jnp.float32, init=hk.initializers.VarianceScaling(1.0, mode="fan_avg")
         )
 
         out = jnp.dot(inputs, w.astype(fprop_dtype))
@@ -177,7 +177,7 @@ class RMSNorm(hk.RMSNorm):
                 "scale",
                 param_shape,
                 dtype=jnp.float32,
-                init=hk.initializers.Constant(0),
+                init=hk.initializers.Constant(1),
             )
             scale = jnp.broadcast_to(scale.astype(jnp.float32), inputs.shape)
         else:

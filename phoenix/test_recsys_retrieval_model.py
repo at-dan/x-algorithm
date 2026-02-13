@@ -246,6 +246,50 @@ class TestPhoenixRetrievalModel(unittest.TestCase):
             scores = np.array(output.top_k_scores[b])
             self.assertTrue(np.all(scores[:-1] >= scores[1:]))
 
+    def test_retrieve_top_k_pads_when_top_k_exceeds_corpus(self):
+        """Test retrieval pads outputs when requested top_k is larger than corpus size."""
+
+        def forward(batch, embeddings, corpus_embeddings, top_k):
+            model = self.config.make()
+            return model(batch, embeddings, corpus_embeddings, top_k)
+
+        forward_fn = hk.without_apply_rng(hk.transform(forward))
+
+        batch, embeddings = self._create_test_batch()
+        small_corpus_size = 3
+        corpus_embeddings, _ = create_example_corpus(small_corpus_size, self.emb_size)
+        requested_top_k = 10
+
+        rng = jax.random.PRNGKey(0)
+        params = forward_fn.init(rng, batch, embeddings, corpus_embeddings, requested_top_k)
+        output = forward_fn.apply(params, batch, embeddings, corpus_embeddings, requested_top_k)
+
+        self.assertEqual(output.top_k_indices.shape, (self.batch_size, requested_top_k))
+        self.assertEqual(output.top_k_scores.shape, (self.batch_size, requested_top_k))
+
+        padded_indices = np.array(output.top_k_indices)[:, small_corpus_size:]
+        self.assertTrue(np.all(padded_indices == -1))
+
+    def test_retrieve_top_k_returns_invalid_indices_for_fully_masked_corpus(self):
+        """Test retrieval marks all outputs invalid when corpus_mask excludes every entry."""
+
+        def forward(batch, embeddings, corpus_embeddings, top_k, corpus_mask):
+            model = self.config.make()
+            return model(batch, embeddings, corpus_embeddings, top_k, corpus_mask=corpus_mask)
+
+        forward_fn = hk.without_apply_rng(hk.transform(forward))
+
+        batch, embeddings = self._create_test_batch()
+        corpus_embeddings, _ = self._create_test_corpus()
+        corpus_mask = jnp.zeros((self.corpus_size,), dtype=jnp.bool_)
+
+        rng = jax.random.PRNGKey(0)
+        params = forward_fn.init(rng, batch, embeddings, corpus_embeddings, self.top_k, corpus_mask)
+        output = forward_fn.apply(params, batch, embeddings, corpus_embeddings, self.top_k, corpus_mask)
+
+        invalid_indices = np.array(output.top_k_indices)
+        self.assertTrue(np.all(invalid_indices == -1))
+
 
 class TestRetrievalInferenceRunner(unittest.TestCase):
     """Tests for the retrieval inference runner."""

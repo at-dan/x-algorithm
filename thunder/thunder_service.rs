@@ -193,12 +193,15 @@ impl InNetworkPostsService for ThunderServiceImpl {
             );
         }
 
-        // If following_user_id list is empty, fetch it from Strato
-        let following_user_ids = if req.following_user_ids.is_empty() && req.debug {
-            info!(
-                "Following list is empty, fetching from Strato for user {}",
-                req.user_id
-            );
+        // If following_user_id list is empty, fetch it from Strato.
+        // This fallback must run regardless of debug mode.
+        let following_user_ids = if req.following_user_ids.is_empty() {
+            if req.debug {
+                info!(
+                    "Following list is empty, fetching from Strato for user {}",
+                    req.user_id
+                );
+            }
 
             match self
                 .strato_client
@@ -206,11 +209,13 @@ impl InNetworkPostsService for ThunderServiceImpl {
                 .await
             {
                 Ok(following_list) => {
-                    info!(
-                        "Fetched {} following users from Strato for user {}",
-                        following_list.len(),
-                        req.user_id
-                    );
+                    if req.debug {
+                        info!(
+                            "Fetched {} following users from Strato for user {}",
+                            following_list.len(),
+                            req.user_id
+                        );
+                    }
                     following_list.into_iter().map(|id| id as u64).collect()
                 }
                 Err(e) => {

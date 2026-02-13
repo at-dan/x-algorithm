@@ -421,11 +421,13 @@ impl PostStore {
                 .as_secs();
 
             let mut total_trimmed = 0;
+            let mut posts_to_remove: HashSet<i64> = HashSet::new();
+            let mut deleted_to_remove: HashSet<i64> = HashSet::new();
 
             // Helper closure to trim posts from a given map
             let trim_map = |posts_by_user: &DashMap<i64, VecDeque<TinyPost>>,
-                            posts_map: &DashMap<i64, LightPost>,
-                            deleted_posts: &DashMap<i64, bool>|
+                            posts_to_remove: &mut HashSet<i64>,
+                            deleted_to_remove: &mut HashSet<i64>|
              -> usize {
                 let mut trimmed = 0;
                 let mut users_to_remove = Vec::new();
@@ -437,10 +439,10 @@ impl PostStore {
                     while let Some(oldest_post) = user_posts.front() {
                         if current_time - (oldest_post.created_at as u64) > retention_seconds {
                             let trimmed_post = user_posts.pop_front().unwrap();
-                            posts_map.remove(&trimmed_post.post_id);
+                            posts_to_remove.insert(trimmed_post.post_id);
 
                             if user_id == DELETE_EVENT_KEY {
-                                deleted_posts.remove(&trimmed_post.post_id);
+                                deleted_to_remove.insert(trimmed_post.post_id);
                             }
                             trimmed += 1;
                         } else {
@@ -465,9 +467,17 @@ impl PostStore {
                 trimmed
             };
 
-            total_trimmed += trim_map(&original_posts_by_user, &posts_map, &deleted_posts);
-            total_trimmed += trim_map(&secondary_posts_by_user, &posts_map, &deleted_posts);
-            trim_map(&video_posts_by_user, &posts_map, &deleted_posts);
+            total_trimmed += trim_map(&original_posts_by_user, &mut posts_to_remove, &mut deleted_to_remove);
+            total_trimmed += trim_map(&secondary_posts_by_user, &mut posts_to_remove, &mut deleted_to_remove);
+            total_trimmed += trim_map(&video_posts_by_user, &mut posts_to_remove, &mut deleted_to_remove);
+
+            // Remove from posts_map only after all timelines are trimmed
+            for post_id in &posts_to_remove {
+                posts_map.remove(post_id);
+            }
+            for post_id in &deleted_to_remove {
+                deleted_posts.remove(post_id);
+            }
 
             total_trimmed
         })

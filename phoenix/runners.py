@@ -367,7 +367,7 @@ class RecsysInferenceRunner(BaseInferenceRunner):
                 p_block_author_score=probs[:, :, 15],
                 p_mute_author_score=probs[:, :, 16],
                 p_report_score=probs[:, :, 17],
-                p_dwell_time=probs[:, :, 18],
+                p_dwell_time=jax.nn.softplus(logits[:, :, 18]),
             )
 
         rank_ = hk.without_apply_rng(hk.transform(hk_rank_candidates))

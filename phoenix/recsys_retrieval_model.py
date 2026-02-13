@@ -161,6 +161,7 @@ class PhoenixRetrievalModel(hk.Module):
     def _get_action_embeddings(
         self,
         actions: jax.Array,
+        padding_mask: Optional[jax.Array] = None,
     ) -> jax.Array:
         """Convert multi-hot action vectors to embeddings."""
         config = self.config
@@ -178,8 +179,8 @@ class PhoenixRetrievalModel(hk.Module):
         actions_signed = (2 * actions - 1).astype(jnp.float32)
         action_emb = jnp.dot(actions_signed.astype(action_projection.dtype), action_projection)
 
-        valid_mask = jnp.any(actions, axis=-1, keepdims=True)
-        action_emb = action_emb * valid_mask
+        if padding_mask is not None:
+            action_emb = action_emb * padding_mask[..., None].astype(action_emb.dtype)
 
         return action_emb.astype(self.fprop_dtype)
 
@@ -231,7 +232,8 @@ class PhoenixRetrievalModel(hk.Module):
             "product_surface_embedding_table",
         )
 
-        history_actions_embeddings = self._get_action_embeddings(batch.history_actions)  # type: ignore
+        history_padding_mask_for_actions = (batch.history_post_hashes[:, :, 0] != 0).astype(jnp.bool_)
+        history_actions_embeddings = self._get_action_embeddings(batch.history_actions, padding_mask=history_padding_mask_for_actions)  # type: ignore
 
         user_embeddings, user_padding_mask = block_user_reduce(
             batch.user_hashes,  # type: ignore

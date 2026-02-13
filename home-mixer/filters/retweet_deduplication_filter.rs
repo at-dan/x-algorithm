@@ -15,26 +15,36 @@ impl Filter<ScoredPostsQuery, PostCandidate> for RetweetDeduplicationFilter {
         _query: &ScoredPostsQuery,
         candidates: Vec<PostCandidate>,
     ) -> Result<FilterResult<PostCandidate>, String> {
+        let original_tweet_ids: HashSet<u64> = candidates
+            .iter()
+            .filter_map(|c| {
+                if c.retweeted_tweet_id.is_none() {
+                    Some(c.tweet_id as u64)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         let mut seen_tweet_ids: HashSet<u64> = HashSet::new();
         let mut kept = Vec::new();
         let mut removed = Vec::new();
 
         for candidate in candidates {
-            match candidate.retweeted_tweet_id {
-                Some(retweeted_id) => {
-                    // Remove if we've already seen this tweet (as original or retweet)
-                    if seen_tweet_ids.insert(retweeted_id) {
-                        kept.push(candidate);
-                    } else {
-                        removed.push(candidate);
-                    }
-                }
-                None => {
-                    // Mark this original tweet ID as seen so retweets of it get filtered
-                    seen_tweet_ids.insert(candidate.tweet_id as u64);
-                    kept.push(candidate);
-                }
+            let tweet_id_to_check = candidate
+                .retweeted_tweet_id
+                .unwrap_or(candidate.tweet_id as u64);
+
+            if seen_tweet_ids.contains(&tweet_id_to_check) {
+                removed.push(candidate);
+                continue;
             }
+
+            if original_tweet_ids.contains(&tweet_id_to_check) {
+                seen_tweet_ids.insert(tweet_id_to_check);
+            }
+
+            kept.push(candidate);
         }
 
         Ok(FilterResult { kept, removed })

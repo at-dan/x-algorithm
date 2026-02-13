@@ -342,9 +342,8 @@ class MultiHeadAttention(hk.Module):
         max_attn_val = jnp.array(30.0, dtype=attn_logits.dtype)
         attn_logits = max_attn_val * jnp.tanh(attn_logits / max_attn_val)
 
-        mask = mask[:, :, None, :, :]
-
         if mask is not None:
+            mask = mask[:, :, None, :, :]
             if mask.ndim != attn_logits.ndim:
                 raise ValueError(
                     f"Mask dimensionality {mask.ndim} must match logits dimensionality "
